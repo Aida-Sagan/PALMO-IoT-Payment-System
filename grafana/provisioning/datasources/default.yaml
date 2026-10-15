@@ -1,0 +1,13 @@
+apiVersion: 1
+datasources:
+  - name: InfluxDB
+    type: influxdb
+    uid: influxdb-palmo-ds
+    access: proxy
+    url: http://influxdb:8086
+    jsonData:
+      version: Flux
+      organization: palmo_org
+      defaultBucket: palmo_ledger
+    secureJsonData:
+      token: ${INFLUX_TOKEN}

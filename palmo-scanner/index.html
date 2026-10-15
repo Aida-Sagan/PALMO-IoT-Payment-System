@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PALMO — Palm Scanner Simulation</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.mjs"
+          crossorigin="anonymous" type="module"></script>
+</head>
+<body>
+  <div id="app">
+    <div id="screen-mode" class="screen active">
+      <h1>PALMO</h1>
+      <p class="subtitle">Palm scanner</p>
+      <div class="menu">
+        <button id="btn-go-payment" class="menu-btn">Payment</button>
+        <button id="btn-go-register" class="menu-btn">Registration</button>
+        <button id="btn-go-topup" class="menu-btn">Top-up</button>
+      </div>
+      <p class="mqtt-status-line">MQTT: <span id="mqtt-status"></span></p>
+    </div>
+
+    <div id="screen-payment" class="screen">
+      <h2>PAYMENT</h2>
+      <label for="payment-amount">Amount to pay (EUR):</label>
+      <input type="number" id="payment-amount" value="25" min="1" step="1">
+      <div class="actions">
+        <button id="btn-payment-start" class="primary">Start scanning</button>
+        <button id="btn-payment-back">Back</button>
+      </div>
+    </div>
+
+    <div id="screen-topup" class="screen">
+      <h2>Balance topup</h2>
+      <label for="topup-amount">Amount (EUR):</label>
+      <input type="number" id="topup-amount" value="50" min="1" step="1">
+      <div class="actions">
+        <button id="btn-topup-start" class="primary">Start scanning</button>
+        <button id="btn-topup-back">Back</button>
+      </div>
+    </div>
+
+    <div id="screen-register" class="screen">
+      <h2>REGISTRATION</h2>
+      <label for="register-name">Username:</label>
+      <input type="text" id="register-name" value="user_001">
+      <label for="register-balance">Initial balance (EUR):</label>
+      <input type="number" id="register-balance" value="100" min="0" step="1">
+      <div class="actions">
+        <button id="btn-register-start" class="primary">Start scanning</button>
+        <button id="btn-register-back">Back</button>
+      </div>
+    </div>
+
+    <div id="screen-result" class="screen">
+      <h2 id="result-title">Result</h2>
+      <div id="result-body"></div>
+      <button id="btn-result-back" class="primary">Back to Main menu</button>
+    </div>
+
+=    <div id="scanner-overlay" class="overlay hidden">
+      <div class="video-wrapper">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div id="scan-line"></div>
+      </div>
+      <div id="scan-status">Initialization...</div>
+      <div class="progress-track">
+        <div id="scan-progress" class="progress-fill"></div>
+      </div>
+      <button id="btn-cancel-scan" style="margin-top:20px">Cancel</button>
+    </div>
+  </div>
+
+  <script type="module" src="scanner.js"></script>
+</body>
+</html>

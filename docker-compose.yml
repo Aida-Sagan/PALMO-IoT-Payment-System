@@ -1,0 +1,85 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: palmo-mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"   # WebSocket
+    command: mosquitto -c /mosquitto/config/mosquitto.conf
+    volumes:
+        - ./mosquitto/config:/mosquitto/config
+    restart: unless-stopped
+
+  influxdb:
+    image: influxdb
+    container_name: palmo-influxdb
+    ports:
+      - "8087:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=BOLZ_oprQ38
+      - DOCKER_INFLUXDB_INIT_ORG=palmo_org
+      - DOCKER_INFLUXDB_INIT_BUCKET=palmo_ledger
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=palmo_super_secret_token_123
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    restart: unless-stopped
+    
+  nodered:
+    build: ./node-red
+    container_name: palmo-nodered
+    ports:
+      - "1880:1880"
+    environment:
+      - FLOWS=flows.json
+      - INFLUX_TOKEN=palmo_super_secret_token_123
+    depends_on:
+      - mosquitto
+    volumes:
+      - nodered-data:/data
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: palmo-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin_password
+      - INFLUX_TOKEN=palmo_super_secret_token_123
+    depends_on:
+      - influxdb
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/etc/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+
+  edge-simulator:
+    build: ./edge-devices
+    container_name: palmo-edge-simulator
+    environment:
+      - MQTT_BROKER=mqtt://mosquitto:1883
+    depends_on:
+      - mosquitto
+      - nodered
+      - influxdb
+    restart: unless-stopped
+
+  scanner:
+    build: ./palmo-scanner
+    container_name: palmo-scanner
+    ports:
+      - "8080:80"
+    depends_on:
+      - mosquitto
+
+volumes:
+  influxdb-data:
+  nodered-data:
+  grafana-data:
+
+
+

@@ -1,0 +1,7 @@
+edge-devices/node_modules/
+edge-devices/package-lock.json
+npm-debug.log
+mosquitto/data/
+mosquitto/log/
+.env
+palmo-scanner/hand_landmarker.task

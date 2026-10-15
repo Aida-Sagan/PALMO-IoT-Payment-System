@@ -1,0 +1,362 @@
+[
+    {
+        "id": "f6f2187d.f17ca8",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "04c0ff50129d4aa9",
+        "type": "mqtt-broker",
+        "name": "mosquitto",
+        "broker": "mosquitto",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "ac609576a4d97b1c",
+        "type": "influxdb",
+        "hostname": "127.0.0.1",
+        "port": 8086,
+        "protocol": "http",
+        "database": "database",
+        "name": "influxDB",
+        "usetls": false,
+        "tls": "",
+        "influxdbVersion": "2.0",
+        "url": "http://influxdb:8086",
+        "timeout": 10,
+        "rejectUnauthorized": true
+    },
+    {
+        "id": "3a4bb0da017eef0e",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-influxdb": "0.7.0"
+        }
+    },
+    {
+        "id": "3cc11d24.ff01a2",
+        "type": "comment",
+        "z": "f6f2187d.f17ca8",
+        "name": "WARNING: please check you have started this container with a volume that is mounted to /data\\n otherwise any flow changes are lost when you redeploy or upgrade the container\\n (e.g. upgrade to a more recent node-red docker image).\\n  If you are using named volumes you can ignore this warning.\\n Double click or see info side panel to learn how to start Node-RED in Docker to save your work",
+        "info": "\nTo start docker with a bind mount volume (-v option), for example:\n\n```\ndocker run -it -p 1880:1880 -v /home/user/node_red_data:/data --name mynodered nodered/node-red\n```\n\nwhere `/home/user/node_red_data` is a directory on your host machine where you want to store your flows.\n\nIf you do not do this then you can experiment and redploy flows, but if you restart or upgrade the container the flows will be disconnected and lost. \n\nThey will still exist in a hidden data volume, which can be recovered using standard docker techniques, but that is much more complex than just starting with a named volume as described above.",
+        "x": 350,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "43ab27768bd24b5c",
+        "type": "mqtt in",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "topic": "palmo/pos/tx",
+        "qos": "1",
+        "datatype": "auto-detect",
+        "broker": "04c0ff50129d4aa9",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 250,
+        "y": 360,
+        "wires": [
+            [
+                "cb4f4c1aa6c6d907"
+            ]
+        ]
+    },
+    {
+        "id": "cb4f4c1aa6c6d907",
+        "type": "json",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 430,
+        "y": 360,
+        "wires": [
+            [
+                "f1bcd795711b2438"
+            ]
+        ]
+    },
+    {
+        "id": "f1bcd795711b2438",
+        "type": "function",
+        "z": "f6f2187d.f17ca8",
+        "name": "Payment proccessing",
+        "func": "const tx = msg.payload;\nlet db = global.get(\"clientsDB\") || {};\n\nlet isApproved = false;\nlet reason = \"\";\nlet clientRecord = db[tx.hash];\n\nif (!clientRecord) {\n    reason = \"Unregistered Palm Hash\";\n}\nelse if (clientRecord.balance < tx.amount) {\n    reason = \"Insufficient funds\";\n}\n\nelse {\n    clientRecord.balance -= tx.amount;\n    global.set(\"clientsDB\", db);\n    isApproved = true;\n    reason = \"Success\";\n}\n\nconst posResponse = {\n    payload: {\n        status: isApproved ? \"APPROVED\" : \"DENIED\",\n        reason: reason,\n        remainingBalance: isApproved ? clientRecord.balance : null\n    },\n    topic: `palmo/pos/${tx.deviceId}/response`\n};\n\nconst gateCommand = isApproved ? {\n    payload: { action: \"OPEN\" },\n    topic: \"palmo/gate/command\"\n} : null;\n\nconst influxMetric = {\n    payload: [\n        {\n            measurement: \"transactions\",\n            fields: {\n                amount: Number(tx.amount)\n            },\n            tags: {\n                device_id: tx.deviceId,\n                status: isApproved ? \"APPROVED\" : \"DENIED\",\n                hash: tx.hash\n            },\n            timestamp: new Date()\n        }\n    ]\n};\n\nreturn [posResponse, gateCommand, influxMetric];",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 620,
+        "y": 360,
+        "wires": [
+            [
+                "d3bd265ab80a3fc9"
+            ],
+            [
+                "592adc9e859f9cab"
+            ],
+            [
+                "8cc0b8d87cc1feca",
+                "4482bda301703ff2"
+            ]
+        ]
+    },
+    {
+        "id": "d3bd265ab80a3fc9",
+        "type": "mqtt out",
+        "z": "f6f2187d.f17ca8",
+        "name": "Out to POS",
+        "topic": "",
+        "qos": "2",
+        "retain": "true",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "04c0ff50129d4aa9",
+        "x": 870,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "592adc9e859f9cab",
+        "type": "mqtt out",
+        "z": "f6f2187d.f17ca8",
+        "name": "Out to Gate",
+        "topic": "",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "04c0ff50129d4aa9",
+        "x": 910,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "b89f9ddd8ee8bc2d",
+        "type": "mqtt in",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "topic": "palmo/register",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "04c0ff50129d4aa9",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 210,
+        "y": 600,
+        "wires": [
+            [
+                "9d66b6e7a2e2dbb9"
+            ]
+        ]
+    },
+    {
+        "id": "c63bdf8c3ac0745a",
+        "type": "function",
+        "z": "f6f2187d.f17ca8",
+        "name": "Registrator",
+        "func": "const data = msg.payload;\n\nlet db = global.get(\"clientsDB\") || {};\n\nif (db[data.hash]) {\n    msg.payload = { status: \"ERROR\", message: \"Client with this palm hash already exists!\" };\n} else {\n    db[data.hash] = {\n        id: \"UID_\" + Math.random().toString(36).substr(2, 9),\n        name: data.name,\n        balance: data.balance\n    };\n    global.set(\"clientsDB\", db);\n    msg.payload = { status: \"SUCCESS\", message: `User ${data.name} registered. ID: ${db[data.hash].id}` };\n}\n\nconst influxMetric = {\n    payload: [\n        {\n            measurement: \"registrations\",\n            fields: {\n                initialBalance: Number(data.balance)\n            },\n            tags: {\n                hash: data.hash,\n                name: data.name\n            },\n            timestamp: new Date()\n        }\n    ]\n};\nmsg.topic = \"palmo/register/status\";\nreturn [msg, influxMetric];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 530,
+        "y": 600,
+        "wires": [
+            [
+                "541ac86cc028bdd2"
+            ],
+            [
+                "4482bda301703ff2"
+            ]
+        ]
+    },
+    {
+        "id": "541ac86cc028bdd2",
+        "type": "mqtt out",
+        "z": "f6f2187d.f17ca8",
+        "name": "OUT to registrator",
+        "topic": "",
+        "qos": "0",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "04c0ff50129d4aa9",
+        "x": 750,
+        "y": 560,
+        "wires": []
+    },
+    {
+        "id": "8bd2c997dd91c22f",
+        "type": "mqtt in",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "topic": "palmo/topup",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "04c0ff50129d4aa9",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 210,
+        "y": 720,
+        "wires": [
+            [
+                "443343d08a43c49d"
+            ]
+        ]
+    },
+    {
+        "id": "443343d08a43c49d",
+        "type": "json",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 370,
+        "y": 720,
+        "wires": [
+            [
+                "ebc875010659fc49"
+            ]
+        ]
+    },
+    {
+        "id": "9d66b6e7a2e2dbb9",
+        "type": "json",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 370,
+        "y": 600,
+        "wires": [
+            [
+                "c63bdf8c3ac0745a"
+            ]
+        ]
+    },
+    {
+        "id": "ebc875010659fc49",
+        "type": "function",
+        "z": "f6f2187d.f17ca8",
+        "name": "Top up",
+        "func": "const data = msg.payload;\nlet db = global.get(\"clientsDB\") || {};\n\nmsg.topic = `palmo/topup/${data.deviceId}/status`\n\nif (!db[data.hash]) {\n    msg.payload = { status: \"ERROR\", message: \"Palm hash not found in database.\" };\n} else {\n    db[data.hash].balance += data.amount;\n    global.set(\"clientsDB\", db);\n\n    msg.payload = {\n        status: \"SUCCESS\",\n        message: `Added ${data.amount} EUR. New balance: ${db[data.hash].balance} EUR.`\n    };\n}\n\nconst influxMetric = {\n    payload: [\n        {\n            measurement: \"topups\",\n            fields: {\n                amount: Number(data.amount)\n            },\n            tags: {\n                device_id: data.deviceId,\n                hash: data.hash\n            },\n            timestamp: new Date()\n        }\n    ]\n};\n\nreturn [msg, influxMetric];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 510,
+        "y": 720,
+        "wires": [
+            [
+                "bd42c625568e3a0b"
+            ],
+            [
+                "4482bda301703ff2"
+            ]
+        ]
+    },
+    {
+        "id": "bd42c625568e3a0b",
+        "type": "mqtt out",
+        "z": "f6f2187d.f17ca8",
+        "name": "OUT to top up",
+        "topic": "",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "04c0ff50129d4aa9",
+        "x": 760,
+        "y": 800,
+        "wires": []
+    },
+    {
+        "id": "8cc0b8d87cc1feca",
+        "type": "debug",
+        "z": "f6f2187d.f17ca8",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 580,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "4482bda301703ff2",
+        "type": "influxdb batch",
+        "z": "f6f2187d.f17ca8",
+        "influxdb": "ac609576a4d97b1c",
+        "precision": "",
+        "retentionPolicy": "",
+        "name": "influx batch",
+        "database": "database",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "palmo_org",
+        "bucket": "palmo_ledger",
+        "x": 970,
+        "y": 580,
+        "wires": []
+    }
+]
